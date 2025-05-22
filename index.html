@@ -30,8 +30,13 @@ body {
 </head>
 <body>
 <div id="toolbar">
+  <input type="text" id="functionLabel" placeholder="Fonction">
   <input type="text" id="nodeLabel" placeholder="Nom de la personne">
   <input type="color" id="fillColor" value="#ffeeba">
+  <select id="textColor">
+    <option value="#000000">Texte noir</option>
+    <option value="#ffffff">Texte blanc</option>
+  </select>
   <select id="lineStyle">
     <option value="solid">Trait continu</option>
     <option value="dotted">Pointillé</option>
@@ -45,7 +50,9 @@ let svg = document.getElementById('canvas');
 let addNodeBtn = document.getElementById('addNode');
 let lineStyleSelect = document.getElementById('lineStyle');
 let fillColorInput = document.getElementById('fillColor');
+let textColorSelect = document.getElementById('textColor');
 let nodeLabelInput = document.getElementById('nodeLabel');
+let functionLabelInput = document.getElementById('functionLabel');
 let selectedNode = null;
 let nodeCount = 0;
 let nodes = [];
@@ -58,18 +65,23 @@ function createSVGElement(tag, attrs) {
 }
 
 function addNode() {
-  const label = nodeLabelInput.value || 'Poste ' + (nodeCount + 1);
+  const func = functionLabelInput.value || 'Fonction';
+  const name = nodeLabelInput.value || 'Nom';
   const color = fillColorInput.value;
+  const textColor = textColorSelect.value;
   const x = 50 + nodeCount * 40;
   const y = 50 + nodeCount * 20;
   const g = createSVGElement('g', { class: 'node', transform: `translate(${x},${y})`, 'data-id': nodeCount });
-  const rect = createSVGElement('rect', { x: 0, y: 0, width: 120, height: 40, fill: color });
-  const text = createSVGElement('text', { x: 60, y: 25, 'text-anchor': 'middle' });
-  text.textContent = label;
+  const rect = createSVGElement('rect', { x: 0, y: 0, width: 120, height: 40, fill: color, rx: 10, ry: 10 });
+  const textFunc = createSVGElement('text', { x: 60, y: 15, 'text-anchor': 'middle', 'font-weight': 'bold', fill: textColor });
+  textFunc.textContent = func;
+  const textName = createSVGElement('text', { x: 60, y: 30, 'text-anchor': 'middle', fill: textColor });
+  textName.textContent = name;
   g.appendChild(rect);
-  g.appendChild(text);
+  g.appendChild(textFunc);
+  g.appendChild(textName);
   svg.appendChild(g);
-  nodes.push({ g, x, y, rect, text });
+  nodes.push({ g, x, y, rect, textFunc, textName });
   makeDraggable(g);
   nodeCount++;
 }
@@ -78,7 +90,16 @@ function makeDraggable(element) {
   let offset = null;
   element.addEventListener('mousedown', (e) => {
     selectedNode = element;
-    offset = { x: e.offsetX, y: e.offsetY };
+    const transform = element.getAttribute('transform');
+    let tx = 0, ty = 0;
+    if (transform) {
+      const m = transform.match(/translate\(([^,]+),([^\)]+)\)/);
+      if (m) {
+        tx = parseFloat(m[1]);
+        ty = parseFloat(m[2]);
+      }
+    }
+    offset = { x: e.offsetX - tx, y: e.offsetY - ty };
   });
   svg.addEventListener('mousemove', (e) => {
     if (selectedNode && offset) {
