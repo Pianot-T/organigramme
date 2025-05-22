@@ -26,6 +26,11 @@ body {
 .line.dotted {
   stroke-dasharray: 5,5;
 }
+.selected rect,
+.selected circle,
+.selected line {
+  stroke: red !important;
+}
 </style>
 </head>
 <body>
@@ -42,6 +47,8 @@ body {
     <option value="dotted">Pointillé</option>
   </select>
   <button id="addNode">Ajouter un poste</button>
+  <button id="addPoint">Ajouter un point</button>
+  <button id="deleteSelection">Supprimer la sélection</button>
   <span id="info"></span>
 </div>
 <svg id="canvas"></svg>
@@ -53,6 +60,9 @@ let fillColorInput = document.getElementById('fillColor');
 let textColorSelect = document.getElementById('textColor');
 let nodeLabelInput = document.getElementById('nodeLabel');
 let functionLabelInput = document.getElementById('functionLabel');
+let addPointBtn = document.getElementById('addPoint');
+let deleteBtn = document.getElementById('deleteSelection');
+let selectedElement = null;
 let selectedNode = null;
 let nodeCount = 0;
 let nodes = [];
@@ -86,6 +96,18 @@ function addNode() {
   nodeCount++;
 }
 
+function addPoint() {
+  const x = 50 + nodeCount * 40;
+  const y = 50 + nodeCount * 20;
+  const g = createSVGElement('g', { class: 'node', transform: `translate(${x},${y})`, 'data-id': nodeCount });
+  const circle = createSVGElement('circle', { cx: 0, cy: 0, r: 5, fill: 'transparent', stroke: 'transparent', style: 'pointer-events:all' });
+  g.appendChild(circle);
+  svg.appendChild(g);
+  nodes.push({ g, point: true });
+  makeDraggable(g);
+  nodeCount++;
+}
+
 function makeDraggable(element) {
   let offset = null;
   element.addEventListener('mousedown', (e) => {
@@ -114,6 +136,10 @@ function makeDraggable(element) {
     offset = null;
   });
   element.addEventListener('click', handleNodeClick);
+  element.addEventListener('dblclick', (e) => {
+    selectElement(element);
+    e.stopPropagation();
+  });
 }
 
 let connectionStart = null;
@@ -139,8 +165,22 @@ svg.addEventListener('click', () => {
 function connectNodes(n1, n2) {
   const line = createSVGElement('line', { class: `line ${lineStyleSelect.value}`, 'data-n1': n1.getAttribute('data-id'), 'data-n2': n2.getAttribute('data-id'), stroke: '#000', 'stroke-width': 2 });
   svg.insertBefore(line, svg.firstChild); // draw lines behind nodes
+  line.addEventListener('click', (e) => {
+    selectElement(line);
+    e.stopPropagation();
+  });
   lines.push(line);
   updateLines();
+}
+
+function getNodeCenter(node) {
+  const m = node.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
+  const x = parseFloat(m[1]);
+  const y = parseFloat(m[2]);
+  if (node.point) {
+    return [x, y];
+  }
+  return [x + 60, y + 20];
 }
 
 function updateLines() {
@@ -149,12 +189,8 @@ function updateLines() {
     const id2 = line.getAttribute('data-n2');
     const node1 = nodes.find(n => n.g.getAttribute('data-id') === id1);
     const node2 = nodes.find(n => n.g.getAttribute('data-id') === id2);
-    const t1 = node1.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
-    const t2 = node2.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
-    const x1 = parseFloat(t1[1]) + 60;
-    const y1 = parseFloat(t1[2]) + 20;
-    const x2 = parseFloat(t2[1]) + 60;
-    const y2 = parseFloat(t2[2]) + 20;
+    const [x1, y1] = getNodeCenter(node1);
+    const [x2, y2] = getNodeCenter(node2);
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
@@ -162,7 +198,35 @@ function updateLines() {
   });
 }
 
+function selectElement(el) {
+  if (selectedElement) selectedElement.classList.remove('selected');
+  selectedElement = el;
+  if (el) el.classList.add('selected');
+}
+
+function deleteSelection() {
+  if (!selectedElement) return;
+  if (selectedElement.tagName === 'line') {
+    lines = lines.filter(l => l !== selectedElement);
+    selectedElement.remove();
+  } else {
+    const id = selectedElement.getAttribute('data-id');
+    lines.filter(l => l.getAttribute('data-n1') === id || l.getAttribute('data-n2') === id).forEach(l => {
+      l.remove();
+      lines = lines.filter(li => li !== l);
+    });
+    nodes = nodes.filter(n => n.g !== selectedElement);
+    selectedElement.remove();
+  }
+  selectedElement = null;
+}
+
 addNodeBtn.addEventListener('click', addNode);
+addPointBtn.addEventListener('click', () => addPoint());
+deleteBtn.addEventListener('click', deleteSelection);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete') deleteSelection();
+});
 </script>
 </body>
 </html>
