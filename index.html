@@ -74,6 +74,8 @@ let nodes = [];
 let lines = [];
 let drawingMode = false;
 let drawingStart = null;
+let previewLine = null;
+let resizing = null;
 
 function updateAddPointBtn() {
   addPointBtn.disabled = !(selectedElement && selectedElement.tagName === 'line');
@@ -206,12 +208,11 @@ function makeDraggable(element) {
   });
   element.addEventListener('click', handleNodeClick);
   element.addEventListener('dblclick', (e) => {
-    selectElement(element);
+    startResizing(element, e);
     e.stopPropagation();
   });
 }
 
-let connectionStart = null;
 
 function handleNodeClick(e) {
   const node = e.currentTarget;
@@ -225,14 +226,8 @@ function handleNodeClick(e) {
       document.getElementById('info').textContent = '';
     }
   } else {
-    if (!connectionStart) {
-      connectionStart = node;
-      document.getElementById('info').textContent = 'Sélectionnez un second poste pour créer le lien.';
-    } else if (connectionStart !== node) {
-      connectNodes(connectionStart, node);
-      connectionStart = null;
-      document.getElementById('info').textContent = '';
-    }
+    selectElement(node);
+    document.getElementById('info').textContent = '';
   }
   e.stopPropagation();
 }
@@ -260,9 +255,8 @@ function handleSvgClick(e) {
     }
     e.stopPropagation();
   } else {
-    connectionStart = null;
-    document.getElementById('info').textContent = '';
     selectElement(null);
+    document.getElementById('info').textContent = '';
   }
 }
 
@@ -278,6 +272,63 @@ function connectNodes(n1, n2) {
   updateLines();
 }
 
+function handleDrawingMove(e) {
+  if (drawingMode && drawingStart) {
+    const startObj = nodes.find(n => n.g === drawingStart);
+    if (!startObj) return;
+    const [x1, y1] = getNodeCenter(startObj);
+    if (!previewLine) {
+      previewLine = createSVGElement('line', { stroke: '#000', 'stroke-width': 2 });
+      svg.insertBefore(previewLine, svg.firstChild);
+    }
+    previewLine.setAttribute('x1', x1);
+    previewLine.setAttribute('y1', y1);
+    previewLine.setAttribute('x2', e.offsetX);
+    previewLine.setAttribute('y2', e.offsetY);
+  } else if (previewLine) {
+    previewLine.remove();
+    previewLine = null;
+  }
+}
+
+function startResizing(node, e) {
+  const obj = nodes.find(n => n.g === node);
+  if (!obj || obj.point) return;
+  selectElement(node);
+  const rect = obj.rect;
+  resizing = {
+    node: obj,
+    startX: e.offsetX,
+    startY: e.offsetY,
+    width: parseFloat(rect.getAttribute('width')),
+    height: parseFloat(rect.getAttribute('height'))
+  };
+  window.addEventListener('mousemove', handleResizing);
+  window.addEventListener('mouseup', stopResizing);
+}
+
+function handleResizing(e) {
+  if (!resizing) return;
+  const dx = e.offsetX - resizing.startX;
+  const dy = e.offsetY - resizing.startY;
+  const w = Math.max(20, resizing.width + dx);
+  const h = Math.max(20, resizing.height + dy);
+  const rect = resizing.node.rect;
+  rect.setAttribute('width', w);
+  rect.setAttribute('height', h);
+  resizing.node.textFunc.setAttribute('x', w / 2);
+  resizing.node.textName.setAttribute('x', w / 2);
+  resizing.node.textName.setAttribute('y', h - 10);
+  updateLines();
+}
+
+function stopResizing() {
+  if (!resizing) return;
+  window.removeEventListener('mousemove', handleResizing);
+  window.removeEventListener('mouseup', stopResizing);
+  resizing = null;
+}
+
 function getNodeCenter(node) {
   const m = node.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
   const x = parseFloat(m[1]);
@@ -285,7 +336,10 @@ function getNodeCenter(node) {
   if (node.point) {
     return [x, y];
   }
-  return [x + 60, y + 20];
+  const rect = node.rect;
+  const w = rect ? parseFloat(rect.getAttribute('width')) : 120;
+  const h = rect ? parseFloat(rect.getAttribute('height')) : 40;
+  return [x + w / 2, y + h / 2];
 }
 
 function updateLines() {
@@ -342,13 +396,14 @@ drawLineBtn.addEventListener('click', () => {
   drawingMode = !drawingMode;
   drawLineBtn.classList.toggle('active', drawingMode);
   drawingStart = null;
-  connectionStart = null;
+  if (previewLine) { previewLine.remove(); previewLine = null; }
   document.getElementById('info').textContent = drawingMode ? 'Cliquez pour commencer le trait.' : '';
 });
 deleteBtn.addEventListener('click', deleteSelection);
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Delete') deleteSelection();
 });
+svg.addEventListener('mousemove', handleDrawingMove);
 </script>
 </body>
 </html>
