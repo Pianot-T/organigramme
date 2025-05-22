@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Organigramme</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+#toolbar {
+  padding: 10px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+}
+#canvas {
+  width: 100%;
+  height: 90vh;
+  cursor: default;
+}
+.node rect {
+  stroke: #000;
+  stroke-width: 1px;
+}
+.line.dotted {
+  stroke-dasharray: 5,5;
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <input type="text" id="nodeLabel" placeholder="Nom de la personne">
+  <input type="color" id="fillColor" value="#ffeeba">
+  <select id="lineStyle">
+    <option value="solid">Trait continu</option>
+    <option value="dotted">Pointillé</option>
+  </select>
+  <button id="addNode">Ajouter un poste</button>
+  <span id="info"></span>
+</div>
+<svg id="canvas"></svg>
+<script>
+let svg = document.getElementById('canvas');
+let addNodeBtn = document.getElementById('addNode');
+let lineStyleSelect = document.getElementById('lineStyle');
+let fillColorInput = document.getElementById('fillColor');
+let nodeLabelInput = document.getElementById('nodeLabel');
+let selectedNode = null;
+let nodeCount = 0;
+let nodes = [];
+let lines = [];
+
+function createSVGElement(tag, attrs) {
+  let el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (let k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function addNode() {
+  const label = nodeLabelInput.value || 'Poste ' + (nodeCount + 1);
+  const color = fillColorInput.value;
+  const x = 50 + nodeCount * 40;
+  const y = 50 + nodeCount * 20;
+  const g = createSVGElement('g', { class: 'node', transform: `translate(${x},${y})`, 'data-id': nodeCount });
+  const rect = createSVGElement('rect', { x: 0, y: 0, width: 120, height: 40, fill: color });
+  const text = createSVGElement('text', { x: 60, y: 25, 'text-anchor': 'middle' });
+  text.textContent = label;
+  g.appendChild(rect);
+  g.appendChild(text);
+  svg.appendChild(g);
+  nodes.push({ g, x, y, rect, text });
+  makeDraggable(g);
+  nodeCount++;
+}
+
+function makeDraggable(element) {
+  let offset = null;
+  element.addEventListener('mousedown', (e) => {
+    selectedNode = element;
+    offset = { x: e.offsetX, y: e.offsetY };
+  });
+  svg.addEventListener('mousemove', (e) => {
+    if (selectedNode && offset) {
+      const x = e.offsetX - offset.x;
+      const y = e.offsetY - offset.y;
+      selectedNode.setAttribute('transform', `translate(${x},${y})`);
+      updateLines();
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    selectedNode = null;
+    offset = null;
+  });
+  element.addEventListener('click', handleNodeClick);
+}
+
+let connectionStart = null;
+
+function handleNodeClick(e) {
+  const node = e.currentTarget;
+  if (!connectionStart) {
+    connectionStart = node;
+    document.getElementById('info').textContent = 'Sélectionnez un second poste pour créer le lien.';
+  } else if (connectionStart !== node) {
+    connectNodes(connectionStart, node);
+    connectionStart = null;
+    document.getElementById('info').textContent = '';
+  }
+  e.stopPropagation();
+}
+
+svg.addEventListener('click', () => {
+  connectionStart = null;
+  document.getElementById('info').textContent = '';
+});
+
+function connectNodes(n1, n2) {
+  const line = createSVGElement('line', { class: `line ${lineStyleSelect.value}`, 'data-n1': n1.getAttribute('data-id'), 'data-n2': n2.getAttribute('data-id'), stroke: '#000', 'stroke-width': 2 });
+  svg.insertBefore(line, svg.firstChild); // draw lines behind nodes
+  lines.push(line);
+  updateLines();
+}
+
+function updateLines() {
+  lines.forEach(line => {
+    const id1 = line.getAttribute('data-n1');
+    const id2 = line.getAttribute('data-n2');
+    const node1 = nodes.find(n => n.g.getAttribute('data-id') === id1);
+    const node2 = nodes.find(n => n.g.getAttribute('data-id') === id2);
+    const t1 = node1.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
+    const t2 = node2.g.getAttribute('transform').match(/translate\(([^,]+),([^\)]+)\)/);
+    const x1 = parseFloat(t1[1]) + 60;
+    const y1 = parseFloat(t1[2]) + 20;
+    const x2 = parseFloat(t2[1]) + 60;
+    const y2 = parseFloat(t2[2]) + 20;
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+  });
+}
+
+addNodeBtn.addEventListener('click', addNode);
+</script>
+</body>
+</html>
